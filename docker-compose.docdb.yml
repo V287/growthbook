@@ -4,15 +4,15 @@ services:
     environment:
       # DocumentDB connection string with SSL
       - MONGODB_URI=mongodb://pelago:i8jxrnMV6BJSLAkxopCCsXUdXygj8wYQ@growthbook-cluster-752221338939.ap-southeast-1.docdb-elastic.amazonaws.com:27017/growthbook?ssl=true&retryWrites=false&authSource=admin
-      - APP_ORIGIN=http://10.0.31.135
-      - API_HOST=http://10.0.31.135
+      - APP_ORIGIN=https://growthbook.dev.pelago.co
+      - API_HOST=https://growthbook.dev.pelago.co
       - JWT_SECRET=your-super-secure-jwt-secret-key-that-should-be-at-least-32-characters-long-for-security
       - ENCRYPTION_KEY=your-super-secure-encryption-key-that-should-be-at-least-32-characters-long-for-security
       - NODE_ENV=production
-      - COOKIE_SECURE=false
+      - COOKIE_SECURE=true
       - COOKIE_SAME_SITE=none
       - TRUSTED_PROXIES=172.0.0.0/8,127.0.0.1,::1
-      - CORS_ORIGIN=http://10.0.31.135
+      - CORS_ORIGIN=https://growthbook.dev.pelago.co
       - DISABLE_CACHE=true
       - CACHE_CONTROL=no-cache, no-store, must-revalidate
       - EMAIL_HOST=smtp.gmail.com
