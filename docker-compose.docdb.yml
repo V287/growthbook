@@ -1,25 +1,16 @@
 services:
-  mongo:
-    image: "mongo:latest"
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=password
-    volumes:
-      - mongodata:/data/db
-  
   growthbook:
     image: "growthbook/growthbook:latest"
-    depends_on:
-      - mongo
     environment:
-      - MONGODB_URI=mongodb://root:password@mongo:27017/growthbook?authSource=admin
+      # DocumentDB connection string with SSL
+      - MONGODB_URI=mongodb://pelago:i8jxrnMV6BJSLAkxopCCsXUdXygj8wYQ@growthbook-cluster-752221338939.ap-southeast-1.docdb-elastic.amazonaws.com:27017/growthbook?ssl=true&retryWrites=false&authSource=admin
       - APP_ORIGIN=http://10.0.31.135
       - API_HOST=http://10.0.31.135
       - JWT_SECRET=your-super-secure-jwt-secret-key-that-should-be-at-least-32-characters-long-for-security
       - ENCRYPTION_KEY=your-super-secure-encryption-key-that-should-be-at-least-32-characters-long-for-security
       - NODE_ENV=production
       - COOKIE_SECURE=false
-      - COOKIE_SAME_SITE=lax
+      - COOKIE_SAME_SITE=none
       - TRUSTED_PROXIES=172.0.0.0/8,127.0.0.1,::1
       - CORS_ORIGIN=http://10.0.31.135
       - DISABLE_CACHE=true
@@ -33,6 +24,19 @@ services:
     networks:
       - growthbook_network
 
+  exposure-api:
+    build:
+      context: ./exposure-api
+      dockerfile: Dockerfile.exposure
+    environment:
+      - DB_HOST=event-warehouse.c42h0lx7fues.ap-southeast-1.redshift.amazonaws.com
+      - DB_PORT=5439
+      - DB_NAME=events
+      - DB_USER=datascience
+      - DB_PASSWORD=eyEnaG26eoTQahEsj6d66KafkDxs4TRv
+    networks:
+      - growthbook_network
+
   nginx:
     image: "nginx:latest"
     ports:
@@ -41,11 +45,9 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - growthbook
+      - exposure-api
     networks:
       - growthbook_network
-
-volumes:
-  mongodata:
 
 networks:
   growthbook_network:

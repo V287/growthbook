@@ -14,12 +14,14 @@ class Cookie {
         httpOnly: true,
         maxAge: maxAge || this.expires,
         secure: req.secure,
+        sameSite: 'lax',
       });
     } else {
       res.cookie(this.key, value, {
         httpOnly: true,
         maxAge: maxAge || this.expires,
         secure: req.secure,
+        sameSite: 'lax',
       });
     }
 
