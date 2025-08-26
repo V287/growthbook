@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import psycopg2
@@ -9,8 +9,13 @@ from datetime import datetime
 import uuid
 import os
 from contextlib import contextmanager
+import logging
 
-app = FastAPI(title="GrowthBook Exposure API", version="1.0.0")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="GrowthBook Async Exposure API", version="2.0.0")
 
 # Database configuration
 DB_CONFIG = {
@@ -76,7 +81,7 @@ async def startup_event():
 @app.get("/")
 async def root():
     """Health check endpoint"""
-    return {"message": "GrowthBook Exposure API", "status": "healthy"}
+    return {"message": "GrowthBook Async Exposure API", "status": "healthy", "mode": "async_background_tasks"}
 
 @app.get("/health")
 async def health_check():
@@ -89,12 +94,9 @@ async def health_check():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
 
-@app.post("/exposure")
-async def log_exposure(exposure: ExposureData):
-    """Log an experiment exposure"""
+def write_exposure_to_db(exposure_data: dict, exposure_id: str):
+    """Background task to write exposure to database"""
     try:
-        exposure_id = str(uuid.uuid4())
-        
         # Prepare the SQL insert
         sql = """
         INSERT INTO growthbook.experiment_exposures 
@@ -103,29 +105,50 @@ async def log_exposure(exposure: ExposureData):
         """
         
         # Convert attributes to JSON string
-        attributes_json = json.dumps(exposure.attributes) if exposure.attributes else None
+        attributes_json = json.dumps(exposure_data.get('attributes')) if exposure_data.get('attributes') else None
         
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, (
                     exposure_id,
-                    exposure.ds_user_id,  # now directly maps to ds_user_id
-                    exposure.experiment_id,
-                    exposure.variation_id,
-                    datetime.now(),  # maps to ts
+                    exposure_data['ds_user_id'],
+                    exposure_data['experiment_id'],
+                    exposure_data['variation_id'],
+                    datetime.now(),
                     attributes_json,
-                    exposure.source
+                    exposure_data['source']
                 ))
                 conn.commit()
         
+        logger.info(f"✅ Exposure {exposure_id} written to database for user {exposure_data['ds_user_id']}")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to write exposure {exposure_id} to database: {e}")
+
+@app.post("/exposure")
+async def log_exposure(exposure: ExposureData, background_tasks: BackgroundTasks):
+    """Queue an exposure for background processing"""
+    try:
+        exposure_id = str(uuid.uuid4())
+        
+        # Add background task to write to database
+        background_tasks.add_task(
+            write_exposure_to_db, 
+            exposure.dict(), 
+            exposure_id
+        )
+        
+        # Return immediate response
         return {
             "success": True,
             "exposure_id": exposure_id,
-            "message": "Exposure logged successfully"
+            "message": "Exposure job submitted successfully",
+            "status": "queued"
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to log exposure: {str(e)}")
+        logger.error(f"❌ Failed to queue exposure job: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to queue exposure job: {str(e)}")
 
 @app.get("/exposures/{user_id}")
 async def get_user_exposures(user_id: str, limit: int = 100):
