@@ -1,0 +1,19 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install fastapi uvicorn psycopg2-binary pydantic
+
+# Copy application
+COPY exposure_api.py .
+COPY start_exposure_api.sh .
+
+# Make script executable
+RUN chmod +x start_exposure_api.sh
+
+# Expose port
+EXPOSE 8000
+
+# Run the application
+CMD ["./start_exposure_api.sh"]
