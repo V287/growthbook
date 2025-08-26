@@ -43,3 +43,6 @@ packages/back-end/src/api/openapi/openapi.tmp.yaml
 
 # package lock files
 package-lock.json
+
+# Specific certificate files that should not be committed
+rds-combined-ca-bundle.pem
