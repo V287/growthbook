@@ -46,3 +46,4 @@ package-lock.json
 
 # Specific certificate files that should not be committed
 rds-combined-ca-bundle.pem
+.env

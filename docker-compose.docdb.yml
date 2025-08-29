@@ -1,13 +1,15 @@
 services:
   growthbook:
     image: "growthbook/growthbook:latest"
+    ports:
+      - "3000:3000"
+      - "3100:3100"
     environment:
-      # DocumentDB connection string with SSL
-      - MONGODB_URI=mongodb://pelago:i8jxrnMV6BJSLAkxopCCsXUdXygj8wYQ@growthbook-cluster-752221338939.ap-southeast-1.docdb-elastic.amazonaws.com:27017/growthbook?ssl=true&retryWrites=false&authSource=admin
+      - MONGODB_URI=${MONGODB_URI}
       - APP_ORIGIN=https://growthbook.dev.pelago.co
       - API_HOST=https://growthbook.dev.pelago.co
-      - JWT_SECRET=your-super-secure-jwt-secret-key-that-should-be-at-least-32-characters-long-for-security
-      - ENCRYPTION_KEY=your-super-secure-encryption-key-that-should-be-at-least-32-characters-long-for-security
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - NODE_ENV=production
       - COOKIE_SECURE=true
       - COOKIE_SAME_SITE=none
@@ -17,10 +19,8 @@ services:
       - CACHE_CONTROL=no-cache, no-store, must-revalidate
       - EMAIL_HOST=smtp.gmail.com
       - EMAIL_PORT=587
-      - EMAIL_HOST_USER=your-email@gmail.com
-      - EMAIL_HOST_PASSWORD=xxxxx
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
     networks:
       - growthbook_network
 
@@ -29,11 +29,11 @@ services:
       context: ./exposure-api
       dockerfile: Dockerfile.exposure
     environment:
-      - DB_HOST=event-warehouse.c42h0lx7fues.ap-southeast-1.redshift.amazonaws.com
+      - DB_HOST=${DB_HOST}
       - DB_PORT=5439
       - DB_NAME=events
-      - DB_USER=datascience
-      - DB_PASSWORD=eyEnaG26eoTQahEsj6d66KafkDxs4TRv
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
     networks:
       - growthbook_network
 
