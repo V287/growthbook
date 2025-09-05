@@ -1,83 +1,223 @@
-<p align="center"><a href="https://www.growthbook.io"><img src="https://cdn.growthbook.io/growthbook-logo@2x.png" width="400px" alt="GrowthBook - Open Source Feature Flagging and A/B Testing" /></a></p>
-<p align="center"><b>Open Source Feature Flagging and A/B Testing</b></p>
-<p align="center">
-    <a href="https://github.com/growthbook/growthbook/github/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/growthbook/growthbook/ci.yml?branch=main" alt="Build Status" height="22"/></a>
-    <a href="https://github.com/growthbook/growthbook/releases"><img src="https://img.shields.io/github/v/release/growthbook/growthbook?color=blue&sort=semver" alt="Release" height="22"/></a>
-    <a href="https://slack.growthbook.io?ref=readme-badge"><img src="https://img.shields.io/badge/slack-join-E01E5A?logo=slack" alt="Join us on Slack" height="22"/></a>
-</p>
+# GrowthBook Kafka Architecture
 
-Get up and running in 1 minute with:
+This repository contains a complete GrowthBook deployment with Kafka-based exposure tracking system.
 
-```sh
-git clone https://github.com/growthbook/growthbook.git
-cd growthbook
-docker compose up -d
+## Architecture Overview
+
+```
+Client Apps → Exposure API → Kafka (MSK) → Consumer → Redshift
+                ↑                                        ↓
+         GrowthBook Dashboard ← DocumentDB        Analytics Data
 ```
 
-Then visit http://localhost:3000
+### Components
 
-[![GrowthBook Screenshot](/features-screenshot.png)](https://www.growthbook.io)
+1. **GrowthBook Dashboard**: Web UI that connects to DocumentDB for configuration and reads from Redshift for analytics
+2. **Exposure API**: FastAPI service that receives exposure events from client applications and produces to Kafka
+3. **Consumer**: Python service that consumes from Kafka and writes exposure data to Redshift
+4. **Kafka (MSK)**: Event streaming platform for reliable message delivery
+5. **DocumentDB**: MongoDB-compatible database for GrowthBook configuration
+6. **Redshift**: Data warehouse for storing exposure analytics
 
-## Our Philosophy
+## Prerequisites
 
-The top 1% of companies spend thousands of hours building their own feature flagging and A/B testing platforms in-house.
-The other 99% are left paying for expensive 3rd party SaaS tools or hacking together unmaintained open source libraries.
+1. AWS MSK Cluster running Kafka 3.8.x
+2. AWS DocumentDB cluster
+3. AWS Redshift cluster
+4. Docker and Docker Compose
 
-We want to give all companies the flexibility and power of a fully-featured in-house platform without needing to build it themselves.
+## Setup Instructions
 
-## Major Features
+### 1. Create Redshift Schema and Table
 
-- 🏁 Feature flags with advanced targeting, gradual rollouts, and experiments
-- 💻 SDKs for [React](https://docs.growthbook.io/lib/react), [Javascript](https://docs.growthbook.io/lib/js), [PHP](https://docs.growthbook.io/lib/php), [Ruby](https://docs.growthbook.io/lib/ruby), [Python](https://docs.growthbook.io/lib/python), [Go](https://docs.growthbook.io/lib/go), [Android](https://docs.growthbook.io/lib/kotlin), [iOS](https://docs.growthbook.io/lib/swift), and [more](https://docs.growthbook.io/lib)!
-- 🆎 Powerful A/B test analysis with advanced statistics (CUPED, Sequential testing, Bayesian, SRM checks, and more)
-- ❄️ Use your existing data stack - BigQuery, Mixpanel, Redshift, Google Analytics, [and more](https://docs.growthbook.io/app/datasources)
-- ⬇️ Drill down into A/B test results by browser, country, or any other custom attribute
-- 🪐 Export reports as a Jupyter Notebook!
-- 📝 Document everything with screenshots and GitHub Flavored Markdown throughout
-- 🔔 Webhooks and a REST API for building integrations
+First, connect to your Redshift cluster and create the required schema and table:
 
-## Try GrowthBook
+```sql
+-- Create the growthbook schema
+CREATE SCHEMA IF NOT EXISTS growthbook;
 
-### Managed Cloud Hosting
-
-Create a free [GrowthBook Cloud](https://app.growthbook.io) account to get started.
-
-### Open Source
-
-The included [docker-compose.yml](https://github.com/growthbook/growthbook/blob/main/docker-compose.yml) file contains the GrowthBook App and a MongoDB instance (for storing cached experiment results and metadata):
-
-```sh
-git clone https://github.com/growthbook/growthbook.git
-cd growthbook
-docker compose up -d
+-- Create the experiment_exposures table
+CREATE TABLE IF NOT EXISTS growthbook.experiment_exposures (
+    exposure_id VARCHAR(64) PRIMARY KEY,
+    ds_user_id VARCHAR(128) NOT NULL,
+    experiment_id VARCHAR(128) NOT NULL,
+    variation_id VARCHAR(64) NOT NULL,
+    ts TIMESTAMP NOT NULL,
+    attributes SUPER,
+    source VARCHAR(32) DEFAULT 'python_sdk',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-Then visit http://localhost:3000 to view the app.
+### 2. Configure Environment Variables
 
-Check out the full [Self-Hosting Instructions](https://docs.growthbook.io/self-host) for more details.
+Create a `.env` file with your AWS credentials and endpoints:
 
-## Documentation and Support
+```env
+# DocumentDB (MongoDB-compatible)
+MONGODB_URI=mongodb://username:password@your-docdb-endpoint:27017/growthbook?ssl=true&retryWrites=false&authSource=admin
 
-View the [GrowthBook Docs](https://docs.growthbook.io) for info on how to configure and use the platform.
+# GrowthBook Configuration
+JWT_SECRET=your-super-secure-jwt-secret-key-that-should-be-at-least-32-characters-long-for-security
+ENCRYPTION_KEY=your-super-secure-encryption-key-that-should-be-at-least-32-characters-long-for-security
 
-Join [our Slack community](https://slack.growthbook.io?ref=readme-support) if you get stuck, want to chat, or are thinking of a new feature.
+# Email Configuration
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-email-password
 
-Or email us at [hello@growthbook.io](mailto:hello@growthbook.io) if Slack isn't your thing.
+# Redshift Data Warehouse
+DB_HOST=your-redshift-cluster-endpoint
+DB_USER=your-redshift-username
+DB_PASSWORD=your-redshift-password
 
-We're here to help - and to make GrowthBook even better!
+# Kafka (MSK) Configuration
+KAFKA_BOOTSTRAP_SERVERS=broker1:9094,broker2:9094,broker3:9094
+```
 
-## Contributors
+### 3. Deploy Services
 
-We ❤️ all contributions, big and small!
+Deploy all services using Docker Compose:
 
-Read [CONTRIBUTING.md](/CONTRIBUTING.md) for how to setup your local development environment.
+```bash
+# Start all services
+docker-compose -f docker-compose.docdb.yml up -d
 
-If you want to, you can reach out via [Slack](https://slack.growthbook.io?ref=readme-contributing) or [email](mailto:hello@growthbook.io) and we'll set up a pair programming session to get you started.
+# Check service status
+docker-compose -f docker-compose.docdb.yml ps
 
-## License
+# View logs
+docker-compose -f docker-compose.docdb.yml logs -f
+```
 
-GrowthBook is an Open Core product. The bulk of the code is under the permissive MIT license. There are several directories that are governed under a separate commercial license, the GrowthBook Enterprise License.
+### 4. Verify Deployment
 
-View the `LICENSE` file in this repository for the full text and details.
+1. **GrowthBook Dashboard**: Access at `http://localhost:80`
+2. **Exposure API Health**: `curl http://localhost:80/exposure/health`
+3. **Test Exposure Logging**:
+   ```bash
+   curl -X POST http://localhost:80/exposure \
+   -H "Content-Type: application/json" \
+   -d '{
+     "ds_user_id": "user123",
+     "experiment_id": "test-experiment",
+     "variation_id": "control",
+     "attributes": {"browser": "chrome"},
+     "source": "web_app"
+   }'
+   ```
 
-![GrowthBook Repository Stats](https://repobeats.axiom.co/api/embed/13ffc63ec5ce7fe45efa95dd326d9185517f0a15.svg "GrowthBook Repository Stats")
+## Service Details
+
+### Exposure API (Port 8000)
+
+FastAPI service that receives exposure events from client applications.
+
+**Endpoints:**
+- `POST /exposure` - Log an exposure event
+- `GET /health` - Health check
+- `GET /exposures/{user_id}` - Get exposures for a user
+- `GET /exposures/experiment/{experiment_key}` - Get exposures for an experiment
+
+**Usage from Client Applications:**
+```python
+import requests
+
+# Log exposure
+response = requests.post("http://your-domain.com/exposure", json={
+    "ds_user_id": "user123",
+    "experiment_id": "checkout-flow-v2",
+    "variation_id": "treatment",
+    "attributes": {
+        "platform": "mobile",
+        "version": "1.2.3"
+    },
+    "source": "mobile_app"
+})
+```
+
+### Consumer Service
+
+Python service that:
+- Consumes messages from Kafka `exposures` topic
+- Batches messages for efficient processing
+- Writes exposure data to Redshift
+- Implements retry logic with exponential backoff
+- Re-queues failed messages to the same topic with retry metadata
+
+**Configuration:**
+- `BATCH_SIZE`: Number of messages to batch (default: 100)
+- `BATCH_TIMEOUT_SECONDS`: Maximum time to wait for batch (default: 30)
+- `MAX_RETRIES`: Maximum retry attempts (default: 3)
+
+### GrowthBook Dashboard
+
+Pre-built Docker image that connects to:
+- **DocumentDB**: For storing experiments, features, and configurations
+- **Redshift**: For reading exposure analytics data from `growthbook.experiment_exposures`
+
+## Data Flow
+
+1. **Client Application** sends exposure events to Exposure API
+2. **Exposure API** validates and produces messages to Kafka
+3. **Kafka** reliably stores and delivers messages
+4. **Consumer** processes messages in batches and writes to Redshift
+5. **GrowthBook Dashboard** reads exposure data for experiment analysis
+
+## Error Handling
+
+The system implements robust error handling:
+
+- **API Level**: Returns immediate response while processing in background
+- **Kafka Level**: Configurable retries and timeouts
+- **Consumer Level**: Batch processing with retry logic
+- **Database Level**: Transaction rollback on failures
+- **Retry Mechanism**: Failed messages are re-queued with retry metadata
+
+## Monitoring
+
+Monitor the system using:
+
+```bash
+# View service logs
+docker-compose -f docker-compose.docdb.yml logs -f exposure-api
+docker-compose -f docker-compose.docdb.yml logs -f growthbook-consumer
+
+# Check Kafka consumer group status
+# (requires Kafka tools)
+kafka-consumer-groups.sh --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS --group growthbook-consumer --describe
+```
+
+## Scaling
+
+- **Exposure API**: Scale horizontally by adding more containers
+- **Consumer**: Scale by increasing partitions and consumer instances
+- **Kafka**: Increase partition count for higher throughput
+- **Redshift**: Use appropriate node types for your data volume
+
+## Security
+
+- All Kafka connections use SSL encryption
+- Database connections are encrypted
+- Secrets are managed via environment variables
+- No credentials are committed to the repository
+
+## Client Integration
+
+Client applications should integrate with the Exposure API to track experiment exposures:
+
+```javascript
+// JavaScript example
+fetch('/exposure', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    ds_user_id: userId,
+    experiment_id: experimentId,
+    variation_id: variationId,
+    attributes: userAttributes,
+    source: 'web_app'
+  })
+});
+```
+
+This architecture ensures reliable, scalable exposure tracking while keeping the GrowthBook dashboard responsive and the data pipeline fault-tolerant.

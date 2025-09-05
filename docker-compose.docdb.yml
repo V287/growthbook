@@ -28,12 +28,37 @@ services:
     build:
       context: ./exposure-api
       dockerfile: Dockerfile.exposure
+    ports:
+      - "8000:8000"
     environment:
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+      - KAFKA_EXPOSURE_TOPIC=exposures
       - DB_HOST=${DB_HOST}
       - DB_PORT=5439
       - DB_NAME=events
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
+    networks:
+      - growthbook_network
+
+  growthbook-consumer:
+    build:
+      context: ./growthbook-consumer
+      dockerfile: Dockerfile.consumer
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+      - KAFKA_CONSUMER_GROUP=growthbook-consumer
+      - KAFKA_EXPOSURE_TOPIC=exposures
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=5439
+      - DB_NAME=events
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - BATCH_SIZE=100
+      - BATCH_TIMEOUT_SECONDS=30
+      - MAX_RETRIES=3
+      - AWS_DEFAULT_REGION=ap-southeast-1
+    restart: unless-stopped
     networks:
       - growthbook_network
 
